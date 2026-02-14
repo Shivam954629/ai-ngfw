@@ -1,0 +1,10 @@
+venv
+__pycache__
+*.pyc
+.git
+.pytest_cache
+*.egg-info
+node_modules
+dashboard/node_modules
+*.md
+.env

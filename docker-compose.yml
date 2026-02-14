@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  ngfw-api:
+    build: .
+    container_name: ai-ngfw-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@db:5432/ngfw
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    container_name: ai-ngfw-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: ngfw
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    container_name: ai-ngfw-dashboard
+    ports:
+      - "3000:80"
+    depends_on:
+      - ngfw-api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
