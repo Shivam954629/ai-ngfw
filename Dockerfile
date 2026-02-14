@@ -15,6 +15,6 @@ COPY . .
 # Create required dirs
 RUN mkdir -p data/raw data/processed data/datasets models logs
 
-EXPOSE 8000
+EXPOSE 10000
 
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "10000"]
