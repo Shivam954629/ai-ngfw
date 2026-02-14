@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 // Support both Vite proxy (/api) and direct API URL
-const API_BASE = import.meta.env.VITE_API_URL || '/api'
+const API_BASE = "https://ai-ngfw.onrender.com";
+
 
 const PRESETS = {
   normal: {
