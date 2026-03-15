@@ -8,15 +8,32 @@
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react&logoColor=black)
 ![ML](https://img.shields.io/badge/ML-RandomForest+Autoencoder-FF6F00?style=flat)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white)
+![Accuracy](https://img.shields.io/badge/Accuracy-94.2%25-22c55e?style=flat)
 ![License](https://img.shields.io/badge/License-Academic-red?style=flat)
 
 ---
 
 ## 📌 Overview
 
-AI-NGFW is an intelligent network security system that uses **Machine Learning** to detect cyber threats in real-time. Unlike traditional firewalls, it uses a dual-model AI pipeline combined with a Zero Trust Policy Engine.
+AI-NGFW is an intelligent network security system that uses **Machine Learning** to detect cyber threats in real-time. Unlike traditional firewalls that rely on static rules, this system uses a **dual-model AI pipeline** combined with a **Zero Trust Policy Engine** for dynamic threat detection.
 
 Based on **IJRIAS Research Paper** — *AI-Driven Next-Generation Firewall for Dynamic Threat Detection and Zero Trust Implementation*
+
+---
+
+## 🖥️ Dashboard Screenshots
+
+### Main Dashboard — Flow Analysis
+![Dashboard Main](screenshots/Screenshot%202026-03-15%20233946.png)
+
+### Attack Timeline & Statistics
+![Timeline](screenshots/Screenshot%202026-03-15%20234033.png)
+
+### Analysis History Table
+![History](screenshots/Screenshot%202026-03-15%20234051.png)
+
+### Security Alerts & Zero Trust Policy
+![Alerts](screenshots/Screenshot%202026-03-15%20234100.png)
 
 ---
 
@@ -28,17 +45,11 @@ Based on **IJRIAS Research Paper** — *AI-Driven Next-Generation Firewall for D
 | 🔒 Zero Trust Engine | Dynamic risk-based access control with configurable thresholds |
 | ⚡ Real-time Detection | 0.01ms average analysis latency |
 | 🔍 Explainable AI | Risk factor breakdown for every decision |
+| 📈 Attack Timeline | Visual risk score trend across analyses |
+| 🕒 Analysis History | Complete session log with threat badges |
 | 📊 Live Dashboard | React-based UI with charts, alerts, demo mode |
 | 📁 Export Reports | CSV/JSON export of all security alerts |
 | 🐳 Docker Ready | One-command containerized deployment |
-
----
-
-## 🖥️ Dashboard Preview
-
-**🟢 Online | RF: ✓ | AE: ✓**
-
-> Flow Analysis with DDoS Detection — Risk Score 60% | Action: Restrict | Latency: 0.01ms
 
 ---
 
@@ -83,11 +94,13 @@ API Docs   →  http://localhost:8000/docs
 ---
 
 ## 🏗️ Project Structure
+
 ```
 ai-ngfw/
 ├── config/                  # Settings & model config
 ├── data/                    # Datasets (gitignored)
 ├── models/                  # Trained model files
+├── screenshots/             # Dashboard screenshots
 ├── src/
 │   ├── api/                 # FastAPI REST endpoints
 │   ├── models/              # RF classifier + Autoencoder
@@ -106,6 +119,7 @@ ai-ngfw/
 ---
 
 ## 🤖 AI Architecture
+
 ```
 Network Traffic Input
         │
@@ -124,6 +138,19 @@ Feature Extraction (12 features)
           ▼         ▼         ▼
         ALLOW    RESTRICT   BLOCK
 ```
+
+---
+
+## 📊 Model Performance
+
+| Metric | Score |
+|---|---|
+| ✅ Accuracy | **94.2%** |
+| ✅ Precision | **94.2%** |
+| ✅ Recall | **94.2%** |
+| ✅ F1-Score | **94.1%** |
+| 📦 Train Samples | 20,000 |
+| 🧪 Test Samples | 5,000 |
 
 ---
 
@@ -149,27 +176,40 @@ Feature Extraction (12 features)
 |---|---|---|
 | Normal | Packets: 100, Port: 443 | ✅ Benign — Allow |
 | DDoS | Packets: 50,000, Duration: 2s | 🔴 DoS — Restrict |
-| Brute Force | Packets: 5,000, Port: 22 | 🔴 Brute Force — Block |
-| Suspicious | Packets: 1,000 | 🟡 Probe — Restrict |
+| Brute Force | Packets: 2,000, Port: 22 | 🔴 Brute Force — Restrict |
+| Suspicious | Packets: 5,000, Port: 3306 | 🟡 Probe — Restrict |
 
 ---
 
 ## 🐳 Docker Deployment
+
 ```bash
 docker-compose up --build
 ```
 
 ---
 
+## 🔒 Zero Trust Policy
+
+| Risk Level | Score Range | Action |
+|---|---|---|
+| 🟢 Low | 0.0 — 0.3 | Allow |
+| 🟡 Medium | 0.3 — 0.6 | Adaptive Auth / Restrict |
+| 🔴 High | 0.6 — 0.8 | Restrict |
+| ⛔ Critical | 0.8 — 1.0 | Block |
+
+---
+
 ## 📄 Research Reference
 
-Based on IJRIAS (International Journal of Research and Innovation in Applied Science) research paper on AI-Driven NGFW systems.
+Based on **IJRIAS** (International Journal of Research and Innovation in Applied Science) research paper on AI-Driven NGFW systems for Dynamic Threat Detection and Zero Trust Implementation.
 
 ---
 
 ## 👨‍💻 About
 
 **Developer:** Shivam  
-**College:** IIMT College of Engineering  
+**College:** IIMT College of Engineering, Greater Noida  
 **Year:** Final Year B.Tech (CSE) — 2025  
+**Deployed:** [https://ai-ngfw.onrender.com](https://ai-ngfw.onrender.com)  
 **License:** Academic/Research use only
