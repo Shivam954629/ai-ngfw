@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import "./App.css";
 
-const API_BASE = "https://ai-ngfw.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "https://ai-ngfw.onrender.com";
 
 const PRESETS = {
   normal: {
@@ -30,12 +30,12 @@ const PRESETS = {
     src_ip: "192.168.1.50",
     dst_ip: "10.0.0.100",
     src_port: 33333,
-    dst_port: 3306,
+    dst_port: 8080,
     protocol: "TCP",
-    packet_count: 5000,
-    byte_volume: 200000,
-    duration: 0.5,
-    fwd_bwd_ratio: 5.0,
+    packet_count: 600,
+    byte_volume: 12000,
+    duration: 3.0,
+    fwd_bwd_ratio: 1.0,
   },
   bruteForce: {
     src_ip: "203.0.113.1",
@@ -43,10 +43,10 @@ const PRESETS = {
     src_port: 49152,
     dst_port: 22,
     protocol: "TCP",
-    packet_count: 2000,
-    byte_volume: 50000,
-    duration: 10.0,
-    fwd_bwd_ratio: 0.2,
+    packet_count: 1500,
+    byte_volume: 37500,
+    duration: 8.0,
+    fwd_bwd_ratio: 1.5,
   },
 };
 
@@ -404,8 +404,12 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.detail || `HTTP ${res.status}`);
+      }
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
       setAnalysis(data);
       setHistory((h) => [
         { ...data, input: { ...flowForm } },
@@ -414,7 +418,7 @@ function App() {
       fetchAlerts();
       fetchStats();
     } catch (e) {
-      setError(e.message || "Failed to analyze");
+      setError(e.message || "Failed to analyze — Is the API running?");
       setAnalysis(null);
     } finally {
       setLoading(false);
@@ -481,24 +485,29 @@ function App() {
   const runDemo = async () => {
     setDemoRunning(true);
     setError(null);
+    setAnalysis(null);
     for (const [, preset] of Object.entries(PRESETS)) {
       setFlowForm(preset);
       try {
-        const data = await (
-          await fetch(`${API_BASE}/analyze`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(preset),
-          })
-        ).json();
+        const res = await fetch(`${API_BASE}/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(preset),
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.detail || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
         setAnalysis(data);
         setHistory((h) => [
           { ...data, input: { ...preset } },
           ...h.slice(0, 19),
         ]);
-        await new Promise((r) => setTimeout(r, 1200));
+        await new Promise((r) => setTimeout(r, 1400));
       } catch (e) {
-        setError(e.message);
+        setError(e.message || "Demo failed — Is the API running?");
         break;
       }
     }
@@ -742,12 +751,16 @@ function App() {
                 <strong>{analysis.policy_latency_ms ?? "—"} ms</strong>
               </div>
 
-              {analysis.explanation &&
-                Object.keys(analysis.explanation).length > 0 && (
+              {(() => {
+                const expl = analysis.explanation || {};
+                const entries = Object.entries(expl).filter(
+                  ([k]) => k !== "message",
+                );
+                return entries.length > 0 ? (
                   <div className="explanation">
                     <h4>Risk Factors</h4>
                     <div className="bar-chart">
-                      {Object.entries(analysis.explanation).map(([k, v]) => (
+                      {entries.map(([k, v]) => (
                         <div key={k} className="bar-row">
                           <span>{k.replace(/_/g, " ")}</span>
                           <div className="bar-wrap">
@@ -764,7 +777,8 @@ function App() {
                       ))}
                     </div>
                   </div>
-                )}
+                ) : null;
+              })()}
             </div>
           )}
         </section>

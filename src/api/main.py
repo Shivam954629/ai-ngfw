@@ -176,17 +176,21 @@ def _heuristic_risk(packet_count: int, byte_volume: int, duration: float) -> flo
     packet_rate = packet_count / dur
     byte_rate = byte_volume / dur
     h = 0.0
-    if packet_rate > 1000:
-        h += 0.3
-    elif packet_rate > 500:
-        h += 0.15
-    if byte_rate > 1_000_000:
-        h += 0.3
+    if packet_rate > 5000:
+        h += 0.25
+    elif packet_rate > 1000:
+        h += 0.12
+    elif packet_rate > 300:
+        h += 0.05
+    if byte_rate > 2_000_000:
+        h += 0.25
+    elif byte_rate > 500_000:
+        h += 0.12
     elif byte_rate > 100_000:
+        h += 0.05
+    if packet_count > 10000 and duration < 1.0:
         h += 0.15
-    if packet_count > 5000 and duration < 1.0:
-        h += 0.2
-    return min(h, 0.5)
+    return min(h, 0.4)
 
 
 @app.post("/analyze")
@@ -242,7 +246,7 @@ def analyze(req: FlowRequest):
         ai_score = max(ai_score, 0.95)
 
     # ---------------- BRUTE FORCE HIGH VOLUME ----------------
-    if req.dst_port == 22 and req.packet_count > 1500:
+    if req.dst_port == 22 and req.packet_count > 3000:
         threat_class = "Brute Force"
         ai_score = max(ai_score, 0.95)
 
@@ -271,21 +275,26 @@ def analyze(req: FlowRequest):
     # ---------------- PORT-SENSITIVE BOOST ----------------
     # SSH brute-force pattern
     if req.dst_port == 22:
-        if req.packet_count > 5000:
+        if req.packet_count > 3000:
             threat_class = "Brute Force"
             ai_score = max(ai_score, 0.95)
-        elif req.packet_count > 1500:
+        elif req.packet_count > 800:
             threat_class = "Brute Force"
-            ai_score = max(ai_score, 0.90)
+            ai_score = max(ai_score, 0.60)
 
     # HTTP/HTTPS flood pattern
     elif req.dst_port in [80, 443]:
-        if req.packet_count > 8000:
+        if req.packet_count > 15000:
             threat_class = "DoS"
             ai_score = max(ai_score, 0.95)
         elif req.packet_count > 5000:
             threat_class = "DoS"
-            ai_score = max(ai_score, 0.90)
+            ai_score = max(ai_score, 0.80)
+
+    # ---------------- BENIGN MINIMUM FLOOR ----------------
+    # Real networks always have baseline risk (misconfigs, recon, etc.)
+    if threat_class == "Benign":
+        ai_score = max(ai_score, 0.18)
 
     # ---------------- POLICY ENGINE ----------------
     assessment = policy_engine.evaluate(
@@ -297,6 +306,28 @@ def analyze(req: FlowRequest):
         explanation=expl if expl else None,
     )
 
+    # If explanation is missing or only has 'message', build one from flow features
+    final_expl = assessment.explanation or {}
+    if not final_expl or "message" in final_expl:
+        dur = max(req.duration, 0.001)
+        packet_rate = req.packet_count / dur
+        byte_rate = req.byte_volume / dur
+        ratio = req.fwd_bwd_ratio or 1.0
+        # Normalize each factor to 0-1 range for display
+        pr_score = min(packet_rate / 10000, 1.0)
+        br_score = min(byte_rate / 2_000_000, 1.0)
+        pc_score = min(req.packet_count / 50000, 1.0)
+        bv_score = min(req.byte_volume / 5_000_000, 1.0)
+        ratio_score = min(abs(ratio - 1.0) / 10.0, 1.0)
+        total = pr_score + br_score + pc_score + bv_score + ratio_score or 1.0
+        final_expl = {
+            "packet_rate":     round(pr_score / total, 2),
+            "byte_rate":       round(br_score / total, 2),
+            "packet_count":    round(pc_score / total, 2),
+            "byte_volume":     round(bv_score / total, 2),
+            "fwd_bwd_ratio":   round(ratio_score / total, 2),
+        }
+
     alert = {
         "timestamp": datetime.utcnow().isoformat(),
         "src_ip": req.src_ip,
@@ -304,7 +335,7 @@ def analyze(req: FlowRequest):
         "risk_score": round(assessment.risk_score, 4),
         "threat_class": threat_class,
         "action": assessment.action.value,
-        "explanation": assessment.explanation,
+        "explanation": final_expl,
     }
 
     # ---------------- ALERT STORAGE ----------------
