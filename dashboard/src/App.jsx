@@ -221,10 +221,7 @@ function TimelineChart({ history }) {
           (scores.length === 1
             ? chartW / 2
             : (i / (scores.length - 1)) * chartW);
-        const labelMap = {
-          "Brute Force": "Brute Force",
-          Infiltration: "Infiltration",
-        };
+        const labelMap = { "Brute Force": "B.Force", Infiltration: "Infiltr." };
         const raw = h.threat_class || `#${i + 1}`;
         const label = labelMap[raw] || raw;
         return (
@@ -232,10 +229,9 @@ function TimelineChart({ history }) {
             key={i}
             x={x}
             y={H - 4}
-            fontSize="7"
+            fontSize="6"
             fill="#555"
-            textAnchor="end"
-            transform={`rotate(-35, ${x}, ${H - 4})`}
+            textAnchor="middle"
           >
             {label}
           </text>
@@ -768,28 +764,43 @@ function App() {
                 const entries = Object.entries(expl).filter(
                   ([k]) => k !== "message",
                 );
-                return entries.length > 0 ? (
+                if (entries.length === 0) return null;
+                const maxVal = Math.max(
+                  ...entries.map(([, v]) => parseFloat(v) || 0),
+                );
+                return (
                   <div className="explanation">
                     <h4>Risk Factors</h4>
                     <div className="bar-chart">
-                      {entries.map(([k, v]) => (
-                        <div key={k} className="bar-row">
-                          <span>{k.replace(/_/g, " ")}</span>
-                          <div className="bar-wrap">
-                            <div
-                              className="bar"
-                              style={{
-                                width: `${Math.min(100, formatExplainValue(v))}%`,
-                                background: riskColor(analysis.risk_score),
-                              }}
-                            />
-                          </div>
-                          <span>{formatExplainValue(v)}%</span>
-                        </div>
-                      ))}
+                      {entries
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([k, v]) => {
+                          const pct =
+                            maxVal > 0
+                              ? ((parseFloat(v) || 0) / maxVal) * 100
+                              : 0;
+                          const display = ((parseFloat(v) || 0) * 100).toFixed(
+                            0,
+                          );
+                          return (
+                            <div key={k} className="bar-row">
+                              <span>{k.replace(/_/g, " ")}</span>
+                              <div className="bar-wrap">
+                                <div
+                                  className="bar"
+                                  style={{
+                                    width: `${pct}%`,
+                                    background: riskColor(analysis.risk_score),
+                                  }}
+                                />
+                              </div>
+                              <span>{display}%</span>
+                            </div>
+                          );
+                        })}
                     </div>
                   </div>
-                ) : null;
+                );
               })()}
             </div>
           )}
