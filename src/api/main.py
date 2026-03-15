@@ -33,7 +33,6 @@ CLASS_LABELS = {
 }
 
 
-
 # --- Models ---
 class FlowRequest(BaseModel):
     """Flow data for threat analysis."""
@@ -101,7 +100,6 @@ def load_models():
 async def lifespan(app: FastAPI):
     load_models()
     yield
-    # cleanup if needed
 
 
 app = FastAPI(
@@ -127,7 +125,6 @@ def _flow_to_features(req: FlowRequest) -> np.ndarray:
     bv = max(req.byte_volume, 0)
     ratio = req.fwd_bwd_ratio or 1.0
     ratio = max(ratio, 0.1)
-    # Derive fwd/bwd from ratio: fwd = pc * ratio/(1+ratio), bwd = pc/(1+ratio)
     fwd_pkts = int(pc * ratio / (1 + ratio))
     bwd_pkts = pc - fwd_pkts
     fwd_bytes = int(bv * ratio / (1 + ratio))
@@ -137,7 +134,6 @@ def _flow_to_features(req: FlowRequest) -> np.ndarray:
     pr_std = req.packet_rate_std or (packet_rate * 0.1)
     br_std = req.byte_rate_std or (byte_rate * 0.1)
 
-    # Build feature dict matching extract_flow_features order
     feat_dict = {
         "packet_count": pc, "byte_volume": bv, "duration": dur,
         "packet_rate": packet_rate, "byte_rate": byte_rate,
@@ -175,7 +171,7 @@ def health():
 
 
 def _heuristic_risk(packet_count: int, byte_volume: int, duration: float) -> float:
-    """Add risk based on obviously suspicious patterns (high volume, burst)."""
+    """Add risk based on obviously suspicious patterns."""
     dur = max(duration, 0.001)
     packet_rate = packet_count / dur
     byte_rate = byte_volume / dur
@@ -216,7 +212,6 @@ def analyze(req: FlowRequest):
         preds, conf = rf_model.predict_with_confidence(
             features, confidence_threshold=0.65
         )
-
         pred = preds[0]
         conf_val = float(conf[0])
 
@@ -244,7 +239,12 @@ def analyze(req: FlowRequest):
 
     if packet_rate > 10000 and req.packet_count > 20000:
         threat_class = "DoS"
-        ai_score = max(ai_score, 0.9)
+        ai_score = max(ai_score, 0.95)
+
+    # ---------------- BRUTE FORCE HIGH VOLUME ----------------
+    if req.dst_port == 22 and req.packet_count > 1500:
+        threat_class = "Brute Force"
+        ai_score = max(ai_score, 0.95)
 
     # ---------------- AUTOENCODER ----------------
     if ae_model and threat_class == "Benign" and ai_score < 0.15:
@@ -253,13 +253,10 @@ def analyze(req: FlowRequest):
             err = ae_model.predict(features[:, :n])
             raw_err = float(err[0])
             thresh = ae_model.threshold or 1.0
-
             anomaly_score = raw_err / max(thresh, 1e-6)
-
             if anomaly_score > 1.5:
                 threat_class = "Anomaly"
                 ai_score = min(0.5 + 0.3 * min(anomaly_score, 2.0), 0.85)
-
         except Exception:
             pass
 
@@ -272,24 +269,23 @@ def analyze(req: FlowRequest):
     ai_score = min(ai_score + heuristic, 1.0)
 
     # ---------------- PORT-SENSITIVE BOOST ----------------
-
     # SSH brute-force pattern
     if req.dst_port == 22:
         if req.packet_count > 5000:
             threat_class = "Brute Force"
-            ai_score = max(ai_score, 0.85)
+            ai_score = max(ai_score, 0.95)
         elif req.packet_count > 1500:
             threat_class = "Brute Force"
-            ai_score = max(ai_score, 0.75)
+            ai_score = max(ai_score, 0.90)
 
     # HTTP/HTTPS flood pattern
     elif req.dst_port in [80, 443]:
         if req.packet_count > 8000:
             threat_class = "DoS"
-            ai_score = max(ai_score, 0.85)
+            ai_score = max(ai_score, 0.95)
         elif req.packet_count > 5000:
             threat_class = "DoS"
-            ai_score = max(ai_score, 0.75)
+            ai_score = max(ai_score, 0.90)
 
     # ---------------- POLICY ENGINE ----------------
     assessment = policy_engine.evaluate(
@@ -338,36 +334,29 @@ def analyze(req: FlowRequest):
     }
 
 
-
 @app.get("/alerts")
 def get_alerts(limit: int = 50):
     """Fetch security alerts."""
     return {"alerts": alerts[-limit:][::-1], "count": len(alerts)}
 
 
-
-
 @app.get("/stats")
 def get_stats():
     """Aggregate statistics for dashboard."""
-
     high_risk = sum(
         1 for a in alerts if (a.get("risk_score") or 0) >= 0.8
     )
-
     threat_counts = {}
     for a in alerts:
         t = a.get("threat_class")
         if not t:
             continue
         threat_counts[t] = threat_counts.get(t, 0) + 1
-
     return {
         "total_alerts": len(alerts),
         "high_risk_count": high_risk,
         "threat_breakdown": threat_counts,
     }
-
 
 
 @app.get("/model/metrics")
@@ -400,10 +389,14 @@ def export_alerts(format: str = "json"):
 
 @app.delete("/alerts")
 def delete_alerts(timestamp: Optional[str] = None, src_ip: Optional[str] = None, dst_ip: Optional[str] = None):
-    """Delete one alert (by timestamp+src_ip+dst_ip) or all alerts if no params."""
+    """Delete one alert or all alerts."""
     global alerts
     if timestamp and src_ip and dst_ip:
-        alerts = [a for a in alerts if not (a.get("timestamp") == timestamp and a.get("src_ip") == src_ip and a.get("dst_ip") == dst_ip)]
+        alerts = [a for a in alerts if not (
+            a.get("timestamp") == timestamp and
+            a.get("src_ip") == src_ip and
+            a.get("dst_ip") == dst_ip
+        )]
     else:
         alerts.clear()
     return {"alerts": alerts[-50:][::-1], "count": len(alerts)}
@@ -437,4 +430,4 @@ def retrain_model():
     raise HTTPException(
         status_code=501,
         detail="Retraining endpoint - run: python -m src.models.train",
-    )     
+    )
