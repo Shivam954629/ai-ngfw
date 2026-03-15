@@ -1,8 +1,15 @@
-
-venv/
- node_modules/
+﻿venv/
+node_modules/
+dashboard/node_modules/
 __pycache__/
 *.pyc
+*.pyo
 models/*.pkl
 models/*.joblib
+models/*.keras
+models/*.npz
 data/*.csv
+logs/
+.vscode/
+.DS_Store
+Thumbs.db
