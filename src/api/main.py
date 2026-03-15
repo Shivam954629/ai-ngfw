@@ -291,6 +291,15 @@ def analyze(req: FlowRequest):
             threat_class = "DoS"
             ai_score = max(ai_score, 0.80)
 
+    # DB port suspicious access — Adaptive Auth range
+    elif req.dst_port in [3306, 5432, 1433, 27017]:
+        if req.packet_count > 1000:
+            threat_class = "Probe"
+            ai_score = max(ai_score, 0.75)
+        elif req.packet_count > 100:
+            threat_class = "Probe"
+            ai_score = 0.35
+
     # ---------------- BENIGN MINIMUM FLOOR ----------------
     # Real networks always have baseline risk (misconfigs, recon, etc.)
     if threat_class == "Benign":
