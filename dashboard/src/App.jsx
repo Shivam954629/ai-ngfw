@@ -26,7 +26,7 @@ const PRESETS = {
     duration: 2.0,
     fwd_bwd_ratio: 10.0,
   },
-  suspicious: {
+  probe: {
     src_ip: "192.168.1.50",
     dst_ip: "10.0.0.100",
     src_port: 33333,
@@ -37,7 +37,7 @@ const PRESETS = {
     duration: 3.0,
     fwd_bwd_ratio: 1.5,
   },
-  bruteForce: {
+  bruteforce: {
     src_ip: "203.0.113.1",
     dst_ip: "192.168.1.10",
     src_port: 49152,
@@ -221,7 +221,9 @@ function TimelineChart({ history }) {
           (scores.length === 1
             ? chartW / 2
             : (i / (scores.length - 1)) * chartW);
-        const label = h.threat_class ? h.threat_class.slice(0, 6) : `#${i + 1}`;
+        const label = h.threat_class
+          ? h.threat_class.slice(0, 10)
+          : `#${i + 1}`;
         return (
           <text
             key={i}
