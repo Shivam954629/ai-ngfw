@@ -434,8 +434,10 @@ function App() {
       });
       await fetch(`${API_BASE}/alerts?${p}`, { method: "DELETE" });
       fetchAlerts();
+      fetchStats();
     } catch {
       fetchAlerts();
+      fetchStats();
     }
   };
 
@@ -443,8 +445,12 @@ function App() {
     try {
       await fetch(`${API_BASE}/alerts`, { method: "DELETE" });
       fetchAlerts();
+      fetchStats();
+      setHistory([]);
+      setAnalysis(null);
     } catch {
       fetchAlerts();
+      fetchStats();
     }
   };
 
