@@ -22,7 +22,7 @@ DATABASE_URL = os.getenv(
     "postgresql://user:pass@localhost:5432/ngfw"
 )
 
-# Model config (tuned for ~90% accuracy)
+# Model config
 RF_ESTIMATORS = 200
 RF_MAX_DEPTH = 25
 AE_ENCODING_DIM = 32
@@ -32,9 +32,12 @@ TRAIN_TEST_SPLIT = 0.2
 RANDOM_STATE = 42
 
 # Zero Trust thresholds
-RISK_THRESHOLD_LOW = 0.2
-RISK_THRESHOLD_MEDIUM = 0.45
-RISK_THRESHOLD_HIGH = 0.70
+# Normal traffic scores ~0.03-0.05 → allow
+# Suspicious scores ~0.35-0.50 → restrict  
+# DoS/BruteForce scores ~0.75-0.85 → block
+RISK_THRESHOLD_LOW = 0.25       # below this → allow
+RISK_THRESHOLD_MEDIUM = 0.50    # below this → restrict
+RISK_THRESHOLD_HIGH = 0.70      # below this → restrict, above → block
 
 # Policy actions
 ACTION_ALLOW = "allow"

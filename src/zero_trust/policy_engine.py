@@ -35,9 +35,6 @@ class RiskAssessment:
     policy_latency_ms: Optional[float] = None
 
 
-# Sensitive ports (database, SSH, RDP) add to risk
-
-
 class ZeroTrustPolicyEngine:
     """Dynamic policy enforcement based on AI risk assessment."""
 
@@ -54,7 +51,7 @@ class ZeroTrustPolicyEngine:
     def _compute_asset_sensitivity(self, dst_ip: str, dst_port: int) -> float:
         """Score 0-1 for destination sensitivity (db/admin ports)."""
         sensitive_ports = [3306, 5432, 1433, 27017, 6379, 22, 3389]
-        return 0.4 if dst_port in sensitive_ports else 0.0
+        return 0.2 if dst_port in sensitive_ports else 0.0
 
     def _build_explanation(
         self,
@@ -81,13 +78,7 @@ class ZeroTrustPolicyEngine:
         anomaly_score: float = 0.0,
         explanation: Optional[dict] = None,
     ) -> RiskAssessment:
-        """Evaluate risk and return policy action.
-
-        Combines:
-        - AI threat score (from classifier/autoencoder)
-        - Asset sensitivity
-        - Anomaly contribution
-        """
+        """Evaluate risk and return policy action."""
         import time
         start = time.perf_counter()
 
@@ -95,8 +86,11 @@ class ZeroTrustPolicyEngine:
         if dst_ip or dst_port:
             asset_score = self._compute_asset_sensitivity(dst_ip or "", dst_port or 0)
 
-        # Combined risk: weighted sum
-        risk_score = 0.6 * ai_threat_score + 0.2 * asset_score + 0.2 * anomaly_score
+        # Fixed formula: AI score gets 85% weight so high threats score high
+        # Normal:      0.85 * 0.03 = 0.025 → allow
+        # Suspicious:  0.85 * 0.55 = 0.467 → restrict
+        # DoS/BF:      0.85 * 1.00 = 0.85  → block
+        risk_score = 0.85 * ai_threat_score + 0.10 * asset_score + 0.05 * anomaly_score
         risk_score = min(max(risk_score, 0.0), 1.0)
 
         if risk_score < self.low_threshold:
