@@ -498,7 +498,7 @@ def analyze(req: FlowRequest):
     }
 
     # ---------------- ALERT STORAGE ----------------
-    if assessment.risk_score >= 0.4:
+    if assessment.risk_score >= 0.3:
         if not any(
             a["src_ip"] == alert["src_ip"]
             and a["dst_ip"] == alert["dst_ip"]
