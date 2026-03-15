@@ -7,9 +7,12 @@ Tests live API at https://ai-ngfw.onrender.com
 import requests
 import time
 import sys
+import os
 from datetime import datetime
 
 API_BASE = "https://ai-ngfw.onrender.com"
+API_KEY = os.environ.get("NGFW_API_KEY", "ngfw-secret-2026")
+HEADERS = {"Content-Type": "application/json", "X-API-Key": API_KEY}
 results = []
 
 def test(name, passed, expected="", actual=""):
@@ -27,12 +30,12 @@ def section(title):
     print("=" * 55)
 
 def post_analyze(payload):
-    r = requests.post(API_BASE + "/analyze", json=payload, timeout=15)
+    r = requests.post(API_BASE + "/analyze", json=payload, headers=HEADERS, timeout=15)
     return r.status_code, r.json()
 
 section("1. Health & Model Status")
 try:
-    r = requests.get(API_BASE + "/health", timeout=10)
+    r = requests.get(API_BASE + "/health", headers=HEADERS, timeout=10)
     data = r.json()
     test("API is online", r.status_code == 200, "200", str(r.status_code))
     test("Status is ok", data.get("status") == "ok", "ok", str(data.get("status")))
@@ -74,14 +77,14 @@ for action in ["allow", "adaptive_auth", "restrict", "block"]:
 
 section("4. Input Validation")
 try:
-    code, _ = post_analyze({"src_ip":"1.2.3.4","dst_ip":"5.6.7.8","src_port":80,"dst_port":80,"protocol":"TCP","packet_count":0,"byte_volume":1000,"duration":0,"fwd_bwd_ratio":1.0})
-    test("Rejects zero packet_count/duration", code == 400, "400", str(code))
+    r = requests.post(API_BASE + "/analyze", json={"src_ip":"1.2.3.4","dst_ip":"5.6.7.8","src_port":80,"dst_port":80,"protocol":"TCP","packet_count":0,"byte_volume":1000,"duration":0,"fwd_bwd_ratio":1.0}, headers=HEADERS, timeout=15)
+    test("Rejects zero packet_count/duration", r.status_code == 400, "400", str(r.status_code))
 except Exception as e:
     test("Validation test", False, "OK", str(e))
 
 section("5. Alerts & Statistics")
 try:
-    r = requests.get(API_BASE + "/alerts", timeout=10)
+    r = requests.get(API_BASE + "/alerts", headers=HEADERS, timeout=10)
     data = r.json()
     test("Alerts endpoint 200", r.status_code == 200)
     test("Has alerts key", "alerts" in data)
@@ -90,7 +93,7 @@ except Exception as e:
     test("Alerts endpoint", False, "OK", str(e))
 
 try:
-    r = requests.get(API_BASE + "/stats", timeout=10)
+    r = requests.get(API_BASE + "/stats", headers=HEADERS, timeout=10)
     data = r.json()
     test("Stats endpoint 200", r.status_code == 200)
     test("Has total_alerts", "total_alerts" in data)
@@ -100,7 +103,7 @@ except Exception as e:
 
 section("6. Model Metrics")
 try:
-    r = requests.get(API_BASE + "/model/metrics", timeout=10)
+    r = requests.get(API_BASE + "/model/metrics", headers=HEADERS, timeout=10)
     data = r.json()
     test("Metrics endpoint 200", r.status_code == 200)
     acc = data.get("accuracy", 0)
@@ -112,7 +115,7 @@ except Exception as e:
 
 section("7. Zero Trust Policy")
 try:
-    r = requests.get(API_BASE + "/policy", timeout=10)
+    r = requests.get(API_BASE + "/policy", headers=HEADERS, timeout=10)
     data = r.json()
     test("Policy GET 200", r.status_code == 200)
     test("Has low_threshold", "low_threshold" in data)
@@ -153,4 +156,3 @@ elif score >= 80:
 else:
     print("  Check failures above.")
 print("")
-
