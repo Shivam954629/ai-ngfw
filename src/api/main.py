@@ -250,6 +250,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- API Key Authentication ---
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+API_KEY = os.environ.get("API_KEY", "")
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    # Skip auth for health check and docs
+    if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
+        return await call_next(request)
+    # If no API_KEY set, skip auth
+    if not API_KEY:
+        return await call_next(request)
+    # Check header
+    key = request.headers.get("X-API-Key", "")
+    if key != API_KEY:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid or missing API key"}
+        )
+    return await call_next(request)
+
 
 def _flow_to_features(req: FlowRequest) -> np.ndarray:
     """Convert API request to feature vector matching training pipeline."""

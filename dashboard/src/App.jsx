@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://ai-ngfw.onrender.com";
+const API_KEY = import.meta.env.VITE_API_KEY || "ngfw-secret-2026";
+const AUTH_HEADERS = {
+  "Content-Type": "application/json",
+  "X-API-Key": API_KEY,
+};
 
 const PRESETS = {
   benign: {
@@ -313,7 +318,11 @@ function App() {
 
   const fetchHealth = useCallback(async () => {
     try {
-      setHealth(await (await fetch(`${API_BASE}/health`)).json());
+      setHealth(
+        await (
+          await fetch(`${API_BASE}/health`, { headers: AUTH_HEADERS })
+        ).json(),
+      );
     } catch {
       setHealth({ status: "error" });
     }
@@ -321,7 +330,9 @@ function App() {
 
   const fetchAlerts = useCallback(async () => {
     try {
-      const d = await (await fetch(`${API_BASE}/alerts?limit=50`)).json();
+      const d = await (
+        await fetch(`${API_BASE}/alerts?limit=50`, { headers: AUTH_HEADERS })
+      ).json();
       const list = (d.alerts || []).filter(
         (v, i, arr) =>
           i ===
@@ -340,7 +351,11 @@ function App() {
 
   const fetchStats = useCallback(async () => {
     try {
-      setStats(await (await fetch(`${API_BASE}/stats`)).json());
+      setStats(
+        await (
+          await fetch(`${API_BASE}/stats`, { headers: AUTH_HEADERS })
+        ).json(),
+      );
     } catch {
       setStats(null);
     }
@@ -348,7 +363,11 @@ function App() {
 
   const fetchMetrics = useCallback(async () => {
     try {
-      setMetrics(await (await fetch(`${API_BASE}/model/metrics`)).json());
+      setMetrics(
+        await (
+          await fetch(`${API_BASE}/model/metrics`, { headers: AUTH_HEADERS })
+        ).json(),
+      );
     } catch {
       setMetrics(null);
     }
@@ -356,7 +375,11 @@ function App() {
 
   const fetchPolicy = useCallback(async () => {
     try {
-      setPolicy(await (await fetch(`${API_BASE}/policy`)).json());
+      setPolicy(
+        await (
+          await fetch(`${API_BASE}/policy`, { headers: AUTH_HEADERS })
+        ).json(),
+      );
     } catch {
       setPolicy(null);
     }
@@ -403,7 +426,7 @@ function App() {
       };
       const res = await fetch(`${API_BASE}/analyze`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: AUTH_HEADERS,
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -434,7 +457,10 @@ function App() {
         src_ip: a.src_ip || "",
         dst_ip: a.dst_ip || "",
       });
-      await fetch(`${API_BASE}/alerts?${p}`, { method: "DELETE" });
+      await fetch(`${API_BASE}/alerts?${p}`, {
+        method: "DELETE",
+        headers: AUTH_HEADERS,
+      });
       fetchAlerts();
       fetchStats();
     } catch {
@@ -445,7 +471,10 @@ function App() {
 
   const clearAllAlerts = async () => {
     try {
-      await fetch(`${API_BASE}/alerts`, { method: "DELETE" });
+      await fetch(`${API_BASE}/alerts`, {
+        method: "DELETE",
+        headers: AUTH_HEADERS,
+      });
       fetchAlerts();
       fetchStats();
       setHistory([]);
@@ -459,7 +488,9 @@ function App() {
   const exportAlerts = async (fmt) => {
     try {
       const blob = await (
-        await fetch(`${API_BASE}/alerts/export?format=${fmt}`)
+        await fetch(`${API_BASE}/alerts/export?format=${fmt}`, {
+          headers: AUTH_HEADERS,
+        })
       ).blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -476,7 +507,7 @@ function App() {
     try {
       await fetch(`${API_BASE}/policy`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: AUTH_HEADERS,
         body: JSON.stringify({
           low_threshold: configTemp.low,
           medium_threshold: configTemp.medium,
@@ -499,7 +530,7 @@ function App() {
       try {
         const res = await fetch(`${API_BASE}/analyze`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: AUTH_HEADERS,
           body: JSON.stringify(preset),
         });
         if (!res.ok) {
