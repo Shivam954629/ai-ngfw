@@ -386,7 +386,7 @@ def analyze(req: FlowRequest):
         "risk_score": round(assessment.risk_score, 4),
         "threat_class": threat_class,
         "action": assessment.action.value,
-        "explanation": assessment.explanation,
+        "explanation": final_expl,
         "policy_latency_ms": assessment.policy_latency_ms,
     }
 
