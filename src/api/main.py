@@ -14,8 +14,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel
 
 from config.settings import MODELS_DIR
@@ -188,6 +192,39 @@ class PolicyUpdate(BaseModel):
     high_threshold: Optional[float] = None
 
 
+# --- Email Alert ---
+def send_alert_email(alert: dict):
+    """Send email notification for high-risk threats."""
+    import smtplib
+    from email.mime.text import MIMEText
+    smtp_user  = os.environ.get("SMTP_USER", "")
+    smtp_pass  = os.environ.get("SMTP_PASS", "")
+    alert_to   = os.environ.get("ALERT_EMAIL", smtp_user)
+    if not smtp_user or not smtp_pass:
+        return
+    try:
+        subject = f"[NGFW ALERT] {alert['threat_class']} detected — {alert['action'].upper()}"
+        body = (
+            f"AI-Driven NGFW Security Alert\n"
+            f"{'='*40}\n"
+            f"Threat Class : {alert['threat_class']}\n"
+            f"Risk Score   : {alert['risk_score']*100:.1f}%\n"
+            f"Action       : {alert['action'].upper()}\n"
+            f"Source IP    : {alert['src_ip']}\n"
+            f"Dest IP      : {alert['dst_ip']}\n"
+            f"Timestamp    : {alert['timestamp']}\n"
+        )
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"]    = smtp_user
+        msg["To"]      = alert_to
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+            s.login(smtp_user, smtp_pass)
+            s.sendmail(smtp_user, alert_to, msg.as_string())
+    except Exception as e:
+        print(f"Email alert failed: {e}")
+
+
 # --- Global state ---
 rf_model = None
 ae_model = None
@@ -242,6 +279,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -251,9 +293,6 @@ app.add_middleware(
 )
 
 # --- API Key Authentication ---
-from fastapi import Request
-from fastapi.responses import JSONResponse
-
 API_KEY = os.environ.get("API_KEY", "")
 
 @app.middleware("http")
@@ -350,7 +389,8 @@ def _heuristic_risk(packet_count: int, byte_volume: int, duration: float) -> flo
 
 
 @app.post("/analyze")
-def analyze(req: FlowRequest):
+@limiter.limit("30/minute")
+def analyze(request: Request, req: FlowRequest):
     """Analyze flow for threats and return risk + policy action."""
 
     # ---------------- INPUT VALIDATION ----------------
@@ -533,7 +573,10 @@ def analyze(req: FlowRequest):
             for a in alerts
         ):
             alerts.append(alert)
-            db_insert_alert(alert)  # Save to PostgreSQL
+            db_insert_alert(alert)
+            # Send email for high risk threats
+            if assessment.risk_score >= 0.7:
+                send_alert_email(alert)
 
         if len(alerts) > 100:
             alerts.pop(0)
