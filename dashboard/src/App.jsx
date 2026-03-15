@@ -4,7 +4,7 @@ import "./App.css";
 const API_BASE = import.meta.env.VITE_API_URL || "https://ai-ngfw.onrender.com";
 
 const PRESETS = {
-  normal: {
+  benign: {
     src_ip: "192.168.1.10",
     dst_ip: "8.8.8.8",
     src_port: 54321,
@@ -15,7 +15,7 @@ const PRESETS = {
     duration: 5.0,
     fwd_bwd_ratio: 1.2,
   },
-  ddos: {
+  dos: {
     src_ip: "10.0.0.1",
     dst_ip: "192.168.1.1",
     src_port: 12345,
@@ -105,11 +105,11 @@ function TimelineChart({ history }) {
     );
   }
   const W = 520,
-    H = 110,
+    H = 120,
     PL = 36,
     PR = 12,
     PT = 14,
-    PB = 24;
+    PB = 34;
   const chartW = W - PL - PR;
   const chartH = H - PT - PB;
   const ordered = [...history].reverse();
@@ -221,17 +221,21 @@ function TimelineChart({ history }) {
           (scores.length === 1
             ? chartW / 2
             : (i / (scores.length - 1)) * chartW);
-        const label = h.threat_class
-          ? h.threat_class.slice(0, 10)
-          : `#${i + 1}`;
+        const labelMap = {
+          "Brute Force": "Brute Force",
+          Infiltration: "Infiltration",
+        };
+        const raw = h.threat_class || `#${i + 1}`;
+        const label = labelMap[raw] || raw;
         return (
           <text
             key={i}
             x={x}
             y={H - 4}
-            fontSize="8"
+            fontSize="7"
             fill="#555"
-            textAnchor="middle"
+            textAnchor="end"
+            transform={`rotate(-35, ${x}, ${H - 4})`}
           >
             {label}
           </text>
@@ -973,21 +977,28 @@ function App() {
               <div>
                 <span>Low</span>
                 <strong style={{ color: "#22c55e" }}>
-                  {policy.low_threshold}
+                  &lt; {policy.low_threshold}
                 </strong>
                 <small>→ Allow</small>
               </div>
               <div>
+                <span>Adaptive Auth</span>
+                <strong style={{ color: "#3b82f6" }}>
+                  {policy.low_threshold} – {policy.medium_threshold}
+                </strong>
+                <small>→ Adaptive Auth</small>
+              </div>
+              <div>
                 <span>Medium</span>
                 <strong style={{ color: "#f59e0b" }}>
-                  {policy.medium_threshold}
+                  {policy.medium_threshold} – {policy.high_threshold}
                 </strong>
                 <small>→ Restrict</small>
               </div>
               <div>
                 <span>High</span>
                 <strong style={{ color: "#ef4444" }}>
-                  {policy.high_threshold}
+                  &gt; {policy.high_threshold}
                 </strong>
                 <small>→ Block</small>
               </div>
