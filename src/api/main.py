@@ -6,6 +6,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+import os
+import json
 import joblib
 import numpy as np
 from contextlib import asynccontextmanager
@@ -19,6 +21,136 @@ from pydantic import BaseModel
 from config.settings import MODELS_DIR
 from src.zero_trust.policy_engine import ZeroTrustPolicyEngine, PolicyAction
 from src.explainability.explainer import ThreatExplainer
+
+# --- PostgreSQL setup ---
+try:
+    import psycopg2
+    import psycopg2.extras
+    DB_URL = os.environ.get("DATABASE_URL", "")
+    _db_available = bool(DB_URL)
+except ImportError:
+    _db_available = False
+
+def get_db():
+    """Get DB connection."""
+    if not _db_available:
+        return None
+    try:
+        conn = psycopg2.connect(DB_URL, sslmode="require")
+        return conn
+    except Exception:
+        return None
+
+def init_db():
+    """Create alerts table if not exists."""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS alerts (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TEXT,
+                    src_ip TEXT,
+                    dst_ip TEXT,
+                    risk_score REAL,
+                    threat_class TEXT,
+                    action TEXT,
+                    explanation TEXT
+                )
+            """)
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+def db_insert_alert(alert: dict):
+    """Insert alert into DB."""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO alerts (timestamp, src_ip, dst_ip, risk_score, threat_class, action, explanation)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                alert["timestamp"], alert["src_ip"], alert["dst_ip"],
+                alert["risk_score"], alert["threat_class"], alert["action"],
+                json.dumps(alert.get("explanation", {}))
+            ))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+def db_get_alerts(limit: int = 50):
+    """Get alerts from DB."""
+    conn = get_db()
+    if not conn:
+        return None
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM alerts ORDER BY id DESC LIMIT %s", (limit,))
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+def db_delete_alert(timestamp: str, src_ip: str, dst_ip: str):
+    """Delete specific alert from DB."""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM alerts WHERE timestamp=%s AND src_ip=%s AND dst_ip=%s",
+                (timestamp, src_ip, dst_ip)
+            )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+def db_delete_all_alerts():
+    """Delete all alerts from DB."""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM alerts")
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+def db_get_stats():
+    """Get stats from DB."""
+    conn = get_db()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM alerts")
+            total = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM alerts WHERE risk_score >= 0.8")
+            high = cur.fetchone()[0]
+            cur.execute("SELECT threat_class, COUNT(*) FROM alerts GROUP BY threat_class")
+            breakdown = {row[0]: row[1] for row in cur.fetchall()}
+        return {"total_alerts": total, "high_risk_count": high, "threat_breakdown": breakdown}
+    except Exception:
+        return None
+    finally:
+        conn.close()
 
 
 # -------------------------------
@@ -99,6 +231,7 @@ def load_models():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_models()
+    init_db()
     yield
 
 
@@ -377,6 +510,7 @@ def analyze(req: FlowRequest):
             for a in alerts
         ):
             alerts.append(alert)
+            db_insert_alert(alert)  # Save to PostgreSQL
 
         if len(alerts) > 100:
             alerts.pop(0)
@@ -393,16 +527,20 @@ def analyze(req: FlowRequest):
 
 @app.get("/alerts")
 def get_alerts(limit: int = 50):
-    """Fetch security alerts."""
+    """Fetch security alerts — DB first, fallback to memory."""
+    db_alerts = db_get_alerts(limit)
+    if db_alerts is not None:
+        return {"alerts": db_alerts, "count": len(db_alerts)}
     return {"alerts": alerts[-limit:][::-1], "count": len(alerts)}
 
 
 @app.get("/stats")
 def get_stats():
-    """Aggregate statistics for dashboard."""
-    high_risk = sum(
-        1 for a in alerts if (a.get("risk_score") or 0) >= 0.8
-    )
+    """Aggregate statistics — DB first, fallback to memory."""
+    db_stats = db_get_stats()
+    if db_stats is not None:
+        return db_stats
+    high_risk = sum(1 for a in alerts if (a.get("risk_score") or 0) >= 0.8)
     threat_counts = {}
     for a in alerts:
         t = a.get("threat_class")
@@ -454,8 +592,10 @@ def delete_alerts(timestamp: Optional[str] = None, src_ip: Optional[str] = None,
             a.get("src_ip") == src_ip and
             a.get("dst_ip") == dst_ip
         )]
+        db_delete_alert(timestamp, src_ip, dst_ip)
     else:
         alerts.clear()
+        db_delete_all_alerts()
     return {"alerts": alerts[-50:][::-1], "count": len(alerts)}
 
 
