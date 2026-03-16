@@ -525,13 +525,18 @@ function App() {
     setDemoRunning(true);
     setError(null);
     setAnalysis(null);
+    const rand = Math.floor(Math.random() * 200) + 10;
     for (const [, preset] of Object.entries(PRESETS)) {
-      setFlowForm(preset);
+      const p = {
+        ...preset,
+        src_ip: preset.src_ip.replace(/\d+$/, String(rand)),
+      };
+      setFlowForm(p);
       try {
         const res = await fetch(`${API_BASE}/analyze`, {
           method: "POST",
           headers: AUTH_HEADERS,
-          body: JSON.stringify(preset),
+          body: JSON.stringify(p),
         });
         if (!res.ok) {
           const errBody = await res.json().catch(() => ({}));
@@ -540,10 +545,7 @@ function App() {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setAnalysis(data);
-        setHistory((h) => [
-          { ...data, input: { ...preset } },
-          ...h.slice(0, 19),
-        ]);
+        setHistory((h) => [{ ...data, input: { ...p } }, ...h.slice(0, 19)]);
         await new Promise((r) => setTimeout(r, 1400));
       } catch (e) {
         setError(e.message || "Demo failed — Is the API running?");
