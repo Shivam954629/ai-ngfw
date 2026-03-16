@@ -17,9 +17,6 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel
 
 from config.settings import MODELS_DIR
@@ -279,10 +276,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# --- Manual Rate Limiter (30 requests/minute per API key) ---
+from collections import defaultdict
+import time as _time
+
+_rate_store: dict = defaultdict(list)
+RATE_LIMIT = 30
+RATE_WINDOW = 60  # seconds
+
+def check_rate_limit(key: str) -> bool:
+    """Returns True if allowed, False if rate limited."""
+    now = _time.time()
+    window_start = now - RATE_WINDOW
+    _rate_store[key] = [t for t in _rate_store[key] if t > window_start]
+    if len(_rate_store[key]) >= RATE_LIMIT:
+        return False
+    _rate_store[key].append(now)
+    return True
 
 app.add_middleware(
     CORSMiddleware,
@@ -389,8 +399,16 @@ def _heuristic_risk(packet_count: int, byte_volume: int, duration: float) -> flo
 
 
 @app.post("/analyze")
-@limiter.limit("30/minute")
 def analyze(request: Request, req: FlowRequest):
+    """Analyze flow for threats and return risk + policy action."""
+
+    # Rate limit check
+    client_key = request.headers.get("X-API-Key", request.client.host if request.client else "unknown")
+    if not check_rate_limit(client_key):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded: max 30 requests per minute"
+        )
     """Analyze flow for threats and return risk + policy action."""
 
     # ---------------- INPUT VALIDATION ----------------
