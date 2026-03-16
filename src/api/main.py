@@ -198,9 +198,10 @@ def send_alert_email(alert: dict):
 def _send_email(alert: dict):
     """Send email via SendGrid API."""
     import urllib.request
-    api_key   = os.environ.get("SENDGRID_API_KEY", "")
-    alert_to  = os.environ.get("ALERT_EMAIL", "")
-    print(f"Email debug: api_key={'set' if api_key else 'MISSING'}, alert_to='{alert_to}'")
+    api_key     = os.environ.get("SENDGRID_API_KEY", "")
+    alert_to    = os.environ.get("ALERT_EMAIL", "")
+    sender_email = os.environ.get("SENDER_EMAIL", alert_to)
+    print(f"Email debug: api_key={'set' if api_key else 'MISSING'}, alert_to='{alert_to}', from='{sender_email}'")
     if not api_key or not alert_to:
         print("Email skipped: missing credentials")
         return
@@ -218,7 +219,7 @@ def _send_email(alert: dict):
         )
         payload = {
             "personalizations": [{"to": [{"email": alert_to}]}],
-            "from": {"email": alert_to},
+            "from": {"email": sender_email, "name": "AI-NGFW Security"},
             "subject": subject,
             "content": [{"type": "text/plain", "value": body}]
         }
