@@ -604,7 +604,7 @@ def analyze(request: Request, req: FlowRequest):
             and abs(
                 datetime.fromisoformat(a["timestamp"]) -
                 datetime.fromisoformat(alert["timestamp"])
-            ).total_seconds() < 30
+            ).total_seconds() < 5
             for a in alerts
         )
         if not is_duplicate:
