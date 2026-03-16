@@ -307,7 +307,9 @@ API_KEY = os.environ.get("API_KEY", "")
 
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
-    # Skip auth for health check and docs
+    # Skip auth for health check, docs and CORS preflight
+    if request.method == "OPTIONS":
+        return await call_next(request)
     if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
         return await call_next(request)
     # If no API_KEY set, skip auth
