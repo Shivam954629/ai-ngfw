@@ -191,13 +191,16 @@ class PolicyUpdate(BaseModel):
 
 # --- Email Alert ---
 def send_alert_email(alert: dict):
-    """Send email notification for high-risk threats."""
-    import smtplib
-    from email.mime.text import MIMEText
-    smtp_user  = os.environ.get("SMTP_USER", "")
-    smtp_pass  = os.environ.get("SMTP_PASS", "")
-    alert_to   = os.environ.get("ALERT_EMAIL", smtp_user)
-    if not smtp_user or not smtp_pass:
+    """Send email in background thread — non-blocking."""
+    import threading
+    threading.Thread(target=_send_email, args=(alert,), daemon=True).start()
+
+def _send_email(alert: dict):
+    """Send email via SendGrid API."""
+    import urllib.request
+    api_key   = os.environ.get("SENDGRID_API_KEY", "")
+    alert_to  = os.environ.get("ALERT_EMAIL", "")
+    if not api_key or not alert_to:
         return
     try:
         subject = f"[NGFW ALERT] {alert['threat_class']} detected — {alert['action'].upper()}"
@@ -211,13 +214,24 @@ def send_alert_email(alert: dict):
             f"Dest IP      : {alert['dst_ip']}\n"
             f"Timestamp    : {alert['timestamp']}\n"
         )
-        msg = MIMEText(body)
-        msg["Subject"] = subject
-        msg["From"]    = smtp_user
-        msg["To"]      = alert_to
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(smtp_user, alert_to, msg.as_string())
+        payload = {
+            "personalizations": [{"to": [{"email": alert_to}]}],
+            "from": {"email": alert_to},
+            "subject": subject,
+            "content": [{"type": "text/plain", "value": body}]
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.sendgrid.com/v3/mail/send",
+            data=data,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"Email sent! Status: {resp.status}")
     except Exception as e:
         print(f"Email alert failed: {e}")
 
