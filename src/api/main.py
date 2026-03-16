@@ -597,22 +597,10 @@ def analyze(request: Request, req: FlowRequest):
 
     # ---------------- ALERT STORAGE ----------------
     if assessment.risk_score >= 0.3:
-        is_duplicate = any(
-            a["src_ip"] == alert["src_ip"]
-            and a["dst_ip"] == alert["dst_ip"]
-            and a["threat_class"] == alert["threat_class"]
-            and abs(
-                datetime.fromisoformat(a["timestamp"]) -
-                datetime.fromisoformat(alert["timestamp"])
-            ).total_seconds() < 5
-            for a in alerts
-        )
-        if not is_duplicate:
-            alerts.append(alert)
-            db_insert_alert(alert)
-            if assessment.risk_score >= 0.7:
-                send_alert_email(alert)
-
+        alerts.append(alert)
+        db_insert_alert(alert)
+        if assessment.risk_score >= 0.7:
+            send_alert_email(alert)
         if len(alerts) > 100:
             alerts.pop(0)
 
