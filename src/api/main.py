@@ -200,7 +200,9 @@ def _send_email(alert: dict):
     import urllib.request
     api_key   = os.environ.get("SENDGRID_API_KEY", "")
     alert_to  = os.environ.get("ALERT_EMAIL", "")
+    print(f"Email debug: api_key={'set' if api_key else 'MISSING'}, alert_to='{alert_to}'")
     if not api_key or not alert_to:
+        print("Email skipped: missing credentials")
         return
     try:
         subject = f"[NGFW ALERT] {alert['threat_class']} detected — {alert['action'].upper()}"
